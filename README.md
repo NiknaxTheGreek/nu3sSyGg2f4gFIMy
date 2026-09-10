@@ -1,78 +1,82 @@
-# Potential Talents - Candidate Ranking with Word2Vec and Rule-Based Relevance
+# Potential Talents - Candidate Ranking with NLPL Model 40 Word2Vec and Rule-Based Relevance
 
 ## Executive Summary
 
-This project develops a candidate-ranking workflow that combines **rule-based relevance screening, Word2Vec semantic ranking, and recruiter-driven reranking**. Evaluated across **52 unique job titles**, Word2Vec showed strong agreement with the rule-based relevance benchmark, while recruiter feedback successfully personalized the ranking without substantially disrupting the shortlist. The result is a practical approach for identifying relevant candidates, ranking them consistently, and adapting results as recruiter preferences become clearer.
+This project develops a candidate-ranking workflow that combines **transparent rule-based relevance screening, semantic ranking with NLPL Model 40 Word2Vec, and recruiter-driven reranking**. The analysis is performed on **52 unique job titles** derived from 104 candidate records so duplicate titles do not receive extra weight in evaluation. Using the pretrained **English CoNLL17 Word2Vec 100-dimensional model (NLPL model 40)**, the Stage-1 ranking achieved **NDCG@10 = 0.948** for `aspiring human resources` and **0.935** for `seeking human resources`, with a mean of **0.942**.
+
+The model covered **100% of the 374 meaningful token occurrences** used across the 52 titles and two recruiter queries, with **zero unique out-of-vocabulary tokens** after the audited preprocessing rules. Recruiter feedback was then tested by shifting the query vector toward a starred candidate. At a conservative **30% feedback influence**, the two demonstration candidates both moved from **rank 2 to rank 1** while retaining **9/10** and **10/10** of the original top-ten shortlist respectively.
+
+## Project Objectives
+
+**Overall objective:** Develop and evaluate a transparent, reproducible candidate-ranking workflow that prioritizes Human Resources candidates for the two recruiter searches using NLPL Model 40 Word2Vec, rule-based relevance, and recruiter feedback.
+
+The project is guided by six sub-objectives:
+
+1. **Audit and prepare the candidate data** by identifying duplicate job titles, reducing the 104 source records to 52 unique titles for unbiased evaluation, and characterizing the title vocabulary.
+2. **Define an auditable relevance benchmark** using occupational relevance and search-intent alignment through the rule score $R = H(0.70 + 0.30I)$.
+3. **Validate the reference procedure independently** by comparing its ordinal relevance levels with the manually assigned 0-3 human relevance grades.
+4. **Rank candidates semantically with NLPL Model 40** by representing titles and recruiter queries with mean Word2Vec embeddings and ordering candidates by cosine similarity.
+5. **Evaluate ranking quality and coverage** using NDCG@10, top-ranked candidate inspection, and vocabulary/OOV checks for both recruiter queries.
+6. **Evaluate recruiter-driven reranking** by shifting the query toward starred candidates, measuring the personalization-stability trade-off across 34 strong scenarios, and translating the findings into practical recommendations and limitations.
 
 ## Problem Definition
 
-Finding the right candidate is not simply a search problem - it is a ranking problem. Recruiters must translate a role's requirements into signals of candidate quality, sift through large pools of profiles, and decide which individuals deserve attention first. This project explores how that process can be made faster and more consistent by automatically scoring and ranking sourced candidates according to how well their professional background aligns with a recruiter's search intent.
+Finding the right candidate is a ranking problem rather than a simple search problem. A recruiter already has a sourced pool of potential candidates and must decide which profiles deserve attention first. The supplied dataset contains **104 anonymized candidate records** with `id`, `job_title`, location, connection count, and an initially empty `fit` field. This project ranks candidates using job-title evidence only, then shows how the ranking can adapt when a recruiter stars an ideal candidate.
 
-The project assumes that a talent-sourcing company has already assembled a pool of potential candidates and now needs to determine which profiles best match a given role. The supplied dataset contains **104 anonymized candidate records**, each with a unique ID, `job_title`, location, connection count, and an initially unpopulated `fit` field. The sourcing stage is treated as complete; the analytical problem begins with scoring, ranking, reviewing, and reranking the available candidates.
+The two recruiter searches are `aspiring human resources` and `seeking human resources`.
 
 ## Data
 
-Because both ranking approaches use only `job_title`, the analysis is performed on the **52 unique job titles** in the 104-record source dataset. Repeated occurrences of the same title do not provide new ranking information: they produce the same rule-based relevance and the same Word2Vec representation. Evaluating each unique title once therefore prevents frequently repeated titles from receiving disproportionate weight in the ranking metrics. The resulting title-level scores can still be mapped back to every original candidate ID for operational use. Location and connection count are retained as metadata but do not influence ranking.
+Because both ranking approaches use only `job_title`, the analysis is performed once per **unique title**. The source data contain 104 rows but only **52 unique job titles**. Fourteen titles repeat, and the most repeated title frequency is **7**. Deduplication prevents repeated titles from artificially dominating frequency analysis or ranking metrics while preserving the ability to map title-level scores back to all original candidate IDs.
 
 | Dataset characteristic | Value |
 |---|---:|
 | Source candidate records | 104 |
 | Unique job titles evaluated | 52 |
-| Ranking feature | `job_title` |
-| Recruiter queries | `aspiring human resources`, `seeking human resources` |
+| Repeated unique titles | 14 |
+| Maximum exact-title frequency | 7 |
+| Titles containing `Human Resources` | 31 (59.6%) |
+| Titles with direct HR evidence | 34 (65.4%) |
+| Titles containing `aspiring` | 12 |
+| Titles containing `seeking` | 10 |
 
 ### Dataset Structure and Vocabulary
 
-Exact-title frequencies are highly uneven: **14 of the 52 unique titles recur** in the 104 source rows, and the three most repeated titles each appear **7 times**. After deduplication, **31/52 titles (59.6%)** explicitly contain *Human Resources*, while **34/52 (65.4%)** contain direct HR evidence once standalone *HR* and CHRO-style signals are included. The target intent terms are common but not universal: **12 titles contain _aspiring_** and **10 contain _seeking_**. Common HR descriptors include *professional* (8 titles), *manager* (7), *generalist* (5), *management* (5), and *specialist* (4), while adjacent terms such as *staffing* (2) and recruiting/recruiter, talent, payroll, benefits, and compensation (1 each) are sparse. This pattern supports both parts of the design: frequent explicit role and intent terms provide auditable evidence for the rule-based reference, while the variation and sparsity of related HR vocabulary make exact keyword matching too brittle on its own and motivate Word2Vec semantic ranking. Counting unique titles rather than all 104 rows also prevents duplicated phrases from artificially dominating the frequency analysis or ranking metrics.
+The title vocabulary contains frequent explicit HR signals but also sparse related terminology. This supports the combined design: rules provide an auditable reference for clear role and intent evidence, while Word2Vec supplies semantic similarity when wording varies. The title audit removes standalone years and phone numbers, treats punctuation and hyphens as separators, removes the structural connector `at`, and drops isolated uppercase initials created by punctuation. Token lookup is exact-case first and lowercase second; possessives are reduced only when their base form exists in the model vocabulary. No synonym substitution is added.
 
-Candidates are first ranked according to their estimated relevance to the selected recruiter query. The ranking must then adapt when a recruiter stars a candidate as an ideal example.
+For Model 40, the 52 titles contain **368 meaningful token occurrences** and the two queries add six more, for **374 total**. All 374 resolve to vectors. Across the analysis there are **208 unique meaningful tokens** and **0 unique OOV tokens**.
 
 ## Ranking Study
 
-The core study compares **two independent approaches to candidate ranking**.
+### 1. NLPL Model 40 Word2Vec Semantic Ranking
 
-### 1. Word2Vec Semantic Ranking
+The embedding model is **NLPL model 40: English CoNLL17 Word2Vec, 100 dimensions, continuous skip-gram**, with a vocabulary header of **4,027,169 words**. The official archive is approximately **3.03 GB** and is not bundled with the repository. Each title and recruiter query is represented by the mean of its available word vectors, and candidates are ranked by cosine similarity to the query representation.
 
-Before generating candidate vectors, words appearing in the 52 unique titles were checked directly against the **GoogleNews Word2Vec vocabulary**. Unresolved words were inspected individually, and preprocessing was defined from this audit: phone numbers and standalone years were removed, punctuation and hyphens were used to separate words, the structural connector `at` and isolated uppercase initials created by punctuation were dropped, exact-case lookup was followed by lowercase fallback, and possessives were reduced only when their base form already existed in the pretrained vocabulary. No external synonyms or semantic substitutions were introduced.
+Official model archive: <https://vectors.nlpl.eu/repository/20/40.zip>
 
-After preprocessing, **367 of 368 meaningful title-token occurrences (99.73%)** were represented, with `ENGIE` the only unresolved meaningful token and every title retaining at least one usable vector. The resulting **300-dimensional word vectors were averaged** to represent each `job_title` and recruiter query, and titles were ranked by cosine similarity to the query.
+### 2. Rule-Based Relevance Reference
 
-### 2. Rule-Based Relevance Ranking
-
-The second approach converts explicit title evidence into a normalized relevance score:
+A transparent relevance score provides an independent query-specific benchmark:
 
 $$R = H(0.70 + 0.30I)$$
 
-where $H$ represents occupational relevance to the target role and $I$ represents alignment with the desired search intent.
+where $H$ represents occupational relevance to Human Resources and $I$ represents alignment with the search intent (`aspiring` or `seeking`). Direct HR evidence receives the strongest occupational relevance; adjacent functions such as staffing, recruiting, talent management, benefits, and compensation receive partial relevance. Clear employer solicitations are assigned zero candidate relevance.
 
-For the HR searches used in this project, direct HR terms such as *Human Resources*, *HR*, *HRIS*, or *CHRO* receive the strongest occupational relevance, while recruiting, staffing, talent management, benefits, compensation, and related functions receive lower adjacent relevance. Intent distinguishes whether a title explicitly reflects **"aspiring"** or **"seeking"** Human Resources.
+## Stage-1 Results
 
-Because intent is multiplied by occupational relevance, generic phrases such as *seeking employment* cannot become HR-relevant simply because they contain the word *seeking*. A separate directionality rule also assigns zero relevance to clear employer solicitations, such as a staffing company seeking HR professionals.
-
-## Word2Vec vs. Rule-Based Ranking
-
-**NDCG@10** measures how closely the Word2Vec top-ten ordering agrees with the graded relevance produced by the rule-based method. The rule-based scores provide the relevance benchmark, while Word2Vec supplies the ranking being evaluated.
+**NDCG@10** measures how well the semantic top-ten ordering places the most relevant titles near the top according to the graded rule-based benchmark.
 
 | Recruiter query | NDCG@10 |
 |---|---:|
-| Aspiring Human Resources | **0.957** |
-| Seeking Human Resources | **0.826** |
-| Mean | **0.892** |
+| Aspiring Human Resources | **0.948** |
+| Seeking Human Resources | **0.935** |
+| Mean | **0.942** |
 
-Word2Vec reproduced the rule-based ordering very strongly for the aspiring-HR query but less consistently for the seeking-HR query. The main disagreements were interpretable. ID 75, an employer advertisement stating that a staffing company was *seeking Human Resources professionals*, ranked highly because Word2Vec recognized the relevant words but could not determine **who was seeking whom**. ID 92, which was seeking employment in Customer Service or Patient Care, also entered the Word2Vec top ten because *seeking* increased semantic similarity despite the absence of HR relevance. Longer titles also showed evidence of **mean-pooling dilution**, where highly relevant HR terms could be weakened by unrelated words receiving equal weight.
+For `aspiring human resources`, the first three titles are **Aspiring Human Resources Specialist (ID 6)**, **Aspiring Human Resources Professional (ID 3)**, and **Aspiring Human Resources Manager, seeking internship in Human Resources (ID 73)**. For `seeking human resources`, the first three are **Seeking Human Resources Opportunities (ID 28)**, **Seeking Human Resources Position (ID 99)**, and **Aspiring Human Resources Manager, seeking internship in Human Resources (ID 73)**.
 
 ## Independent Human Relevance Assessment
 
-As an additional human benchmark, the **52 unique job titles were manually assigned relevance grades from 0 to 3** using title information alone.
-
-| Grade | Interpretation |
-|---:|---|
-| 0 | No meaningful HR relevance |
-| 1 | Weak or adjacent HR relevance |
-| 2 | Clearly HR-related |
-| 3 | Strongest match with explicit target career intent |
-
-The manual labels were kept separate from both ranking methods and were not used to train Word2Vec or determine the rule-based scores.
+The 52 unique titles were independently assigned 0-3 human relevance grades using title information only. These labels were not used to train Model 40 or construct the rule score.
 
 | Human vs. rule-based agreement | Result |
 |---|---:|
@@ -80,55 +84,42 @@ The manual labels were kept separate from both ranking methods and were not used
 | Quadratic weighted Cohen's kappa | **0.888** |
 | Spearman correlation | **0.871** |
 
-Most disagreements occurred between neighboring relevance levels rather than between clearly relevant and irrelevant titles.
-
 ## Recruiter Feedback and Dynamic Reranking
 
-When a recruiter stars a candidate as an ideal example, the original Word2Vec search representation is shifted toward that candidate's job-title vector:
+When a recruiter stars a candidate, the query vector is shifted toward that candidate's normalized title vector:
 
-$$q_2 = \frac{0.70q + 0.30d_\star}{\lVert 0.70q + 0.30d_\star \rVert}$$
+$$q_2 = \operatorname{normalize}((1-w)q + wd_\star)$$
 
-The mechanism was tested across **34 unique ideal-title/query scenarios**. Title/query combinations with rule-based relevance scores of **0.85 to 1.00** were treated as strong matches, and each was starred one at a time before **all 52 unique titles were reranked**.
+The feedback sweep evaluates **34 strong title/query scenarios** (`R >= 0.85`) at 10%, 20%, 30%, 40%, and 50% feedback influence.
 
 | Feedback weight | Median starred-title rank | Median original top-10 retained |
 |---:|---:|---:|
-| 10% | 7 | 9/10 |
-| 20% | 5 | 9/10 |
-| **30%** | **2** | **9/10** |
-| 40% | 1 | 8/10 |
-| 50% | 1 | 7/10 |
+| 10% | 8.0 | 9/10 |
+| 20% | 6.5 | 9/10 |
+| 30% | 5.0 | 9/10 |
+| 40% | 3.5 | 8/10 |
+| 50% | 1.0 | 8/10 |
 
-A **30% feedback weight** provided the best balance between personalization and ranking stability: the updated query retains 70% of the original recruiter search and incorporates 30% of the starred candidate representation.
-
-Two representative examples show the effect:
+The sweep shows a personalization-stability trade-off rather than a single universally optimal weight. A **30% setting** is retained as a conservative demonstration point because it preserves a median **9/10** of the original top ten and performs strongly in the two representative examples, but it is **not claimed as a global optimum**.
 
 | Query | Starred candidate | Rank change | Top-10 retained | NDCG@10 |
 |---|---|---:|---:|---:|
-| Aspiring HR | ID 3 - *Aspiring Human Resources Professional* | **4 -> 1** | 9/10 | 0.957 -> **0.959** |
-| Seeking HR | ID 99 - *Seeking Human Resources Position* | **8 -> 1** | 8/10 | 0.826 -> **0.904** |
-
-For the **seeking** query, ID 100, which explicitly seeks an entry-level Human Resources position, moved from **rank 15 to rank 9**, while ID 92, which seeks work in Customer Service or Patient Care rather than HR, fell from **rank 10 to rank 15**. Recruiter feedback therefore changes more than the starred candidate itself; it also reorganizes semantically similar and dissimilar candidates around it.
+| Aspiring HR | ID 3 - *Aspiring Human Resources Professional* | **2 -> 1** | 9/10 | 0.948 -> **0.955** |
+| Seeking HR | ID 99 - *Seeking Human Resources Position* | **2 -> 1** | 10/10 | 0.935 -> **0.940** |
 
 ## Practical Implications
 
-Titles receiving a **rule-based relevance score of 0** can be flagged for exclusion or recruiter review before shortlisting. This provides a transparent safeguard against obvious false positives while preserving Word2Vec's flexibility for ranking relevant candidates.
-
-A universal cosine-similarity cutoff is unlikely to transfer safely across different roles because absolute Word2Vec similarity scores depend on the recruiter query and the vocabulary used in the candidate pool. Instead, the two ranking methods can serve different purposes: the rule-based score can first **flag profiles with no defensible role relevance**, while Word2Vec can then **rank the remaining candidates relative to one another**. This separates the question of *whether a profile belongs in the candidate pool at all* from the question of *which relevant candidates should appear first*, reducing the risk of rejecting strong candidates because of an arbitrary similarity threshold.
-
-Importantly, the rule-based framework itself is not limited to Human Resources: $H$ can be generalized to represent relevance to any target role, while $I$ can represent alignment with any desired intent expressed in the search query. Scaling the approach therefore requires defining and validating new role- and intent-specific rules, but the underlying scoring structure can remain unchanged.
-
-Automation can reduce some sources of inconsistency by applying the same relevance criteria and ranking procedure to every candidate rather than relying entirely on manual judgement. The rule-based method is explicit and auditable, while Word2Vec provides a consistent semantic ranking without using location or connection count as proxies for candidate quality. Automation should not, however, be treated as bias-free: pretrained embeddings can reflect patterns present in their training data, and recruiter selections can introduce human preferences into later rankings. Recruiter oversight, feedback logging, and periodic review therefore remain important.
+Use the rule system to flag profiles with no defensible role relevance, Model 40 to rank the remaining titles semantically, and recruiter feedback as a controlled personalization layer. A universal cosine-similarity cutoff is not recommended because absolute similarity depends on the query and candidate pool. Recruiter oversight remains important because pretrained embeddings may reflect patterns in their training corpus and recruiter selections can propagate human preferences into later rankings.
 
 ## Limitations
 
-- Mean-pooled Word2Vec does not reliably interpret **directionality**, such as distinguishing a candidate seeking HR work from an employer seeking HR professionals.
-- Equal averaging can dilute important signals in long job titles.
-- The ranking uses only `job_title`; relevant skills or experience absent from the title cannot influence fitness.
-- New occupations require suitable role- and intent-specific rules to be defined and validated.
+- Mean-pooled Word2Vec does not fully model sentence directionality or context.
+- Equal averaging can dilute important terms in long job titles.
+- Only `job_title` is used; skills and experience absent from the title cannot affect ranking.
+- The rule framework must be redefined and validated for occupations outside Human Resources.
+- Feedback weight is a product choice with a personalization-stability trade-off; the current experiment does not establish a universal optimum.
 
 ## Project Structure
-
-The final project contains **exactly 10 files**: the original candidate dataset, a 52-title manually labelled dataset used only for independent human-relevance validation, three executed notebooks covering rule-based ranking, Word2Vec ranking, and recruiter-feedback reranking, the README, a Technical Report, a Business Recommendations report, `requirements.txt`, and `.gitignore`.
 
 ```text
 project/
@@ -146,6 +137,4 @@ project/
 
 ## Reproducibility
 
-The project is implemented as a reproducible **Python workflow across three executed notebooks**. Notebook 01 recomputes the dataset audit, rule scores, and independent human-vs-rule validation entirely from the included CSV files. Notebooks 02 and 03 contain the complete GoogleNews Word2Vec ranking and feedback code; because the pretrained model is about 1.6 GB compressed, it is not bundled with the repository. Set `GOOGLE_NEWS_W2V_PATH` to a local GoogleNews binary (or set `ALLOW_GENSIM_DOWNLOAD=1`) to recompute the model-dependent results. When the external model is absent, those notebooks execute all model-independent checks and display the checked reference checkpoints explicitly rather than silently substituting a different embedding model. In live mode, assertions verify that the published rounded NDCG and feedback results are reproduced.
-
-The required embedding is the Gensim `word2vec-google-news-300` / **3-million-word, 300-dimensional GoogleNews Word2Vec model**.
+Notebook 01 recomputes the dataset audit, duplicate analysis, rule scores, and independent human-vs-rule validation from the two included CSV files. Notebooks 02 and 03 use **NLPL Model 40 only**. Place the official `40.zip` archive in the project root (or set `NLPL_MODEL40_ZIP` to its path). The notebooks stream `model.txt` directly from the archive and extract only the vectors needed by the 52 titles and two queries, avoiding the memory cost of loading the complete 4-million-word model into RAM.
