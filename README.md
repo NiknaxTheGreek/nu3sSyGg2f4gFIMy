@@ -61,9 +61,9 @@ Official model archive: <https://vectors.nlpl.eu/repository/20/40.zip>
 
 A transparent relevance score provides an independent query-specific benchmark:
 
-$$R = H(0.70 + 0.30I)$$
+`R = H(0.70 + 0.30I)`
 
-where $H$ represents occupational relevance to Human Resources and $I$ represents alignment with the search intent (`aspiring` or `seeking`). Direct HR evidence receives the strongest occupational relevance; adjacent functions such as staffing, recruiting, talent management, benefits, and compensation receive partial relevance. Clear employer solicitations are assigned zero candidate relevance so a company *seeking HR professionals* is not mistaken for a candidate seeking HR work.
+where `H` represents occupational relevance to Human Resources and `I` represents alignment with the search intent (`aspiring` or `seeking`). Direct HR evidence receives the strongest occupational relevance; adjacent functions such as staffing, recruiting, talent management, benefits, and compensation receive partial relevance. Clear employer solicitations are assigned zero candidate relevance so a company *seeking HR professionals* is not mistaken for a candidate seeking HR work.
 
 ## Stage-1 Results
 
@@ -93,7 +93,7 @@ The high weighted agreement supports the rule framework as a reasonable graded r
 
 When a recruiter stars a candidate, the query vector is shifted toward that candidate's normalized title vector:
 
-$$q_2 = \operatorname{normalize}((1-w)q + wd_\star)$$
+`q2 = normalize((1-w)q + w*d*)`
 
 The feedback sweep evaluates **34 strong title/query scenarios** (`R >= 0.85`) at 10%, 20%, 30%, 40%, and 50% feedback influence.
 
@@ -147,3 +147,5 @@ project/
 Notebook 01 recomputes the dataset audit, duplicate analysis, rule scores, and independent human-vs-rule validation from the two included CSV files. Notebooks 02 and 03 use **NLPL Model 40 only**. Place the official `40.zip` archive in the project root (or set `NLPL_MODEL40_ZIP` to its path). The notebooks stream `model.txt` directly from the archive and extract only the vectors needed by the 52 titles and two queries, avoiding the memory cost of loading the complete 4-million-word model into RAM.
 
 The verified live run used the official archive at <https://vectors.nlpl.eu/repository/20/40.zip>, confirmed vector size **100**, vocabulary header **4,027,169**, and **100% token-occurrence coverage** for the analysis corpus.
+
+<!-- package-revision: final-model40-v4 -->
