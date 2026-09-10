@@ -4,6 +4,6 @@ __pycache__/
 .venv/
 venv/
 .DS_Store
-GoogleNews-vectors-negative300.bin
-GoogleNews-vectors-negative300.bin.gz
-gensim-data/
+40.zip
+model.bin
+model.txt
