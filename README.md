@@ -1,4 +1,4 @@
-# Potential Talents - Candidate Ranking with NLPL Model 40 Word2Vec and Rule-Based Relevance
+# Potential Talents - Candidate Ranking
 
 ## Executive Summary
 
@@ -8,26 +8,29 @@ The model covered **100% of the 374 meaningful token occurrences** used across t
 
 ## Project Objectives
 
-**Overall objective:** Develop and evaluate a transparent, reproducible candidate-ranking workflow that prioritizes Human Resources candidates for the two recruiter searches using NLPL Model 40 Word2Vec, rule-based relevance, and recruiter feedback.
+**Overall objective:** Develop a transparent and adaptable candidate-ranking system that helps recruiters identify the most relevant candidates faster and more consistently.
 
 The project is guided by six sub-objectives:
 
-1. **Audit and prepare the candidate data** by identifying duplicate job titles, reducing the 104 source records to 52 unique titles for unbiased evaluation, and characterizing the title vocabulary.
-2. **Define an auditable relevance benchmark** using occupational relevance and search-intent alignment through the rule score $R = H(0.70 + 0.30I)$.
-3. **Validate the reference procedure independently** by comparing its ordinal relevance levels with the manually assigned 0-3 human relevance grades.
-4. **Rank candidates semantically with NLPL Model 40** by representing titles and recruiter queries with mean Word2Vec embeddings and ordering candidates by cosine similarity.
-5. **Evaluate ranking quality and coverage** using NDCG@10, top-ranked candidate inspection, and vocabulary/OOV checks for both recruiter queries.
-6. **Evaluate recruiter-driven reranking** by shifting the query toward starred candidates, measuring the personalization-stability trade-off across 34 strong scenarios, and translating the findings into practical recommendations and limitations.
+1. **Remove duplicate job titles and analyse title vocabulary** to prevent repeated profiles from biasing results and support reliable candidate ranking.
+2. **Define explicit relevance rules for `aspiring human resources` and `seeking human resources`** to reduce false positives and make automated screening auditable.
+3. **Validate the relevance rules against independent human labels** to confirm alignment with recruiter judgement and reduce manual review effort.
+4. **Rank candidates by semantic similarity to recruiter search intent** to identify relevant candidates despite differences in job-title wording and improve candidate discovery.
+5. **Measure ranking quality using NDCG@10** to confirm the strongest candidates appear first and reduce recruiter review time.
+6. **Test recruiter-feedback strength against candidate movement and top-10 retention** to personalize recommendations at scale without unnecessarily disrupting strong existing candidates.
 
 ## Problem Definition
 
 Finding the right candidate is a ranking problem rather than a simple search problem. A recruiter already has a sourced pool of potential candidates and must decide which profiles deserve attention first. The supplied dataset contains **104 anonymized candidate records** with `id`, `job_title`, location, connection count, and an initially empty `fit` field. This project ranks candidates using job-title evidence only, then shows how the ranking can adapt when a recruiter stars an ideal candidate.
 
-The two recruiter searches are `aspiring human resources` and `seeking human resources`.
+The two recruiter searches are:
+
+- `aspiring human resources`
+- `seeking human resources`
 
 ## Data
 
-Because both ranking approaches use only `job_title`, the analysis is performed once per **unique title**. The source data contain 104 rows but only **52 unique job titles**. Fourteen titles repeat, and the most repeated title frequency is **7**. Deduplication prevents repeated titles from artificially dominating frequency analysis or ranking metrics while preserving the ability to map title-level scores back to all original candidate IDs.
+Because both ranking approaches use only `job_title`, the analysis is performed once per **unique title**. The source data contain 104 rows but only **52 unique job titles**. Fourteen titles repeat, and the most repeated title frequency is **7**. Deduplication therefore prevents repeated titles from artificially dominating frequency analysis or ranking metrics while preserving the ability to map title-level scores back to all original candidate IDs.
 
 | Dataset characteristic | Value |
 |---|---:|
@@ -60,7 +63,7 @@ A transparent relevance score provides an independent query-specific benchmark:
 
 $$R = H(0.70 + 0.30I)$$
 
-where $H$ represents occupational relevance to Human Resources and $I$ represents alignment with the search intent (`aspiring` or `seeking`). Direct HR evidence receives the strongest occupational relevance; adjacent functions such as staffing, recruiting, talent management, benefits, and compensation receive partial relevance. Clear employer solicitations are assigned zero candidate relevance.
+where $H$ represents occupational relevance to Human Resources and $I$ represents alignment with the search intent (`aspiring` or `seeking`). Direct HR evidence receives the strongest occupational relevance; adjacent functions such as staffing, recruiting, talent management, benefits, and compensation receive partial relevance. Clear employer solicitations are assigned zero candidate relevance so a company *seeking HR professionals* is not mistaken for a candidate seeking HR work.
 
 ## Stage-1 Results
 
@@ -72,7 +75,7 @@ where $H$ represents occupational relevance to Human Resources and $I$ represent
 | Seeking Human Resources | **0.935** |
 | Mean | **0.942** |
 
-For `aspiring human resources`, the first three titles are **Aspiring Human Resources Specialist (ID 6)**, **Aspiring Human Resources Professional (ID 3)**, and **Aspiring Human Resources Manager, seeking internship in Human Resources (ID 73)**. For `seeking human resources`, the first three are **Seeking Human Resources Opportunities (ID 28)**, **Seeking Human Resources Position (ID 99)**, and **Aspiring Human Resources Manager, seeking internship in Human Resources (ID 73)**.
+The top-ranked candidates are intuitive for both searches. For `aspiring human resources`, the first three titles are **Aspiring Human Resources Specialist (ID 6)**, **Aspiring Human Resources Professional (ID 3)**, and **Aspiring Human Resources Manager, seeking internship in Human Resources (ID 73)**. For `seeking human resources`, the first three are **Seeking Human Resources Opportunities (ID 28)**, **Seeking Human Resources Position (ID 99)**, and **Aspiring Human Resources Manager, seeking internship in Human Resources (ID 73)**.
 
 ## Independent Human Relevance Assessment
 
@@ -83,6 +86,8 @@ The 52 unique titles were independently assigned 0-3 human relevance grades usin
 | Exact ordinal agreement | **39/52 - 75.0%** |
 | Quadratic weighted Cohen's kappa | **0.888** |
 | Spearman correlation | **0.871** |
+
+The high weighted agreement supports the rule framework as a reasonable graded relevance reference while keeping the semantic ranking independent.
 
 ## Recruiter Feedback and Dynamic Reranking
 
@@ -100,7 +105,7 @@ The feedback sweep evaluates **34 strong title/query scenarios** (`R >= 0.85`) a
 | 40% | 3.5 | 8/10 |
 | 50% | 1.0 | 8/10 |
 
-The sweep shows a personalization-stability trade-off rather than a single universally optimal weight. A **30% setting** is retained as a conservative demonstration point because it preserves a median **9/10** of the original top ten and performs strongly in the two representative examples, but it is **not claimed as a global optimum**.
+The sweep shows a clear personalization-stability trade-off rather than a single universally optimal weight. Higher weights move the starred candidate upward more aggressively but alter more of the original shortlist. A **30% setting** is retained as a conservative demonstration point because it preserves a median **9/10** of the original top ten and performs strongly in the two representative examples, but it is **not claimed as a global optimum**.
 
 | Query | Starred candidate | Rank change | Top-10 retained | NDCG@10 |
 |---|---|---:|---:|---:|
@@ -109,7 +114,9 @@ The sweep shows a personalization-stability trade-off rather than a single unive
 
 ## Practical Implications
 
-Use the rule system to flag profiles with no defensible role relevance, Model 40 to rank the remaining titles semantically, and recruiter feedback as a controlled personalization layer. A universal cosine-similarity cutoff is not recommended because absolute similarity depends on the query and candidate pool. Recruiter oversight remains important because pretrained embeddings may reflect patterns in their training corpus and recruiter selections can propagate human preferences into later rankings.
+The rule-based score and Model 40 serve different purposes. The rule system can flag profiles with no defensible role relevance, while Model 40 ranks the remaining titles semantically. This separates *whether a profile belongs in the candidate pool* from *which relevant candidates should appear first*. Recruiter feedback then adds controlled personalization without requiring the model to be retrained.
+
+A universal cosine-similarity cutoff is not recommended because absolute similarity depends on the query and candidate pool. Relative ranking plus an auditable relevance screen is safer and easier to explain. Recruiter oversight remains important because pretrained embeddings may reflect patterns in their training corpus and recruiter selections can propagate human preferences into later rankings.
 
 ## Limitations
 
@@ -138,3 +145,5 @@ project/
 ## Reproducibility
 
 Notebook 01 recomputes the dataset audit, duplicate analysis, rule scores, and independent human-vs-rule validation from the two included CSV files. Notebooks 02 and 03 use **NLPL Model 40 only**. Place the official `40.zip` archive in the project root (or set `NLPL_MODEL40_ZIP` to its path). The notebooks stream `model.txt` directly from the archive and extract only the vectors needed by the 52 titles and two queries, avoiding the memory cost of loading the complete 4-million-word model into RAM.
+
+The verified live run used the official archive at <https://vectors.nlpl.eu/repository/20/40.zip>, confirmed vector size **100**, vocabulary header **4,027,169**, and **100% token-occurrence coverage** for the analysis corpus.
