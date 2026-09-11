@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'step7.py'
+      - 'cache_embeddings.py'
       - 'step7_input.csv'
       - '.github/workflows/step7-word2vec.yml'
 
@@ -22,11 +23,16 @@ jobs:
         run: |
           curl -L --fail --retry 5 --retry-delay 5 -o 40.zip https://vectors.nlpl.eu/repository/20/40.zip
           ls -lh 40.zip
-      - name: Run exact Step 7
-        run: python step7.py
-      - name: Upload results
+      - name: Run exact Step 7 and preserve embeddings
+        run: python cache_embeddings.py
+      - name: Upload reusable Word2Vec outputs
         uses: actions/upload-artifact@v4
         with:
-          name: step7-word2vec-results
-          path: step7_results.csv
-          retention-days: 1
+          name: model40-reusable-project-cache
+          path: |
+            step7_results.csv
+            model40_candidate_embeddings_50x100.csv
+            model40_candidate_embeddings_50x100.npy
+            model40_query_embeddings_2x100.csv
+            model40_required_token_vectors.csv
+          retention-days: 7
